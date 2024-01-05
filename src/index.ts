@@ -4,7 +4,6 @@ import { connectToDb } from "./db/db.js";
 import { safeAwait } from "./utils/error.js";
 import { existsSync, fstat, mkdirSync, writeFileSync } from "fs";
 import { executeCommand } from "./helpers/shell.js";
-import { writeFile } from "fs/promises";
 import { startAIChat } from "./helpers/aiChat.js";
 const bot = new Bot(env.BOT_TOKEN, {
   client: {
@@ -78,29 +77,7 @@ bot.hears(/\/shell (.+)/, async (ctx) => {
     await ctx.api.editMessageText(msg.chat.id, msg.message_id, result);
   });
 });
-/////////////////////////////////
-// file upload
-///////////////////////////////
-bot.on("message:file", async (ctx) => {
-  const data = ctx.message?.document;
-  if (!data) {
-    await ctx.reply("No file provided!");
-    return;
-  }
-});
-bot.command("upload", async (ctx) => {
-  if (ctx.from?.id !== env.ADMIN_ID) {
-    await ctx.reply("You are not admin!");
-    return;
-  }
-  const file = ctx.msg.reply_to_message?.document?.file_id;
-  if (!file) {
-    await ctx.reply("No provided!");
-    return;
-  }
 
-  // await ctx.reply();
-});
 // //////////////////////////////////
 // message
 // //////////////////////////////////
