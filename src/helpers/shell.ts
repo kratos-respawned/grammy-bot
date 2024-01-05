@@ -7,8 +7,9 @@ export function executeCommand(command: string): Promise<string> {
       } else if (stderr) {
         resolve(stderr);
       } else {
-        if (stdout.length === 0) resolve("Command executed successfully!");
-        resolve(stdout);
+        if (stdout === null || stdout.length === 0)
+          resolve("Command executed successfully!");
+        else resolve(stdout);
       }
     });
   });
