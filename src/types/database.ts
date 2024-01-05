@@ -6,8 +6,8 @@ export interface User {
 }
 
 export interface Chat {
-  chatId: number;
-  title: string;
+  role: "model" | "user";
+  parts: string;
 }
 
 export interface Database {

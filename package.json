@@ -10,7 +10,7 @@
     "start": "node dist/index.js",
     "dev:tsc": "tsc --watch --preserveWatchOutput",
     "dev:node": "node --watch dist/index.js",
-    "dev:swc": "npm run build -watch",
+    "dev:swc": "swc src -d dist -w ",
     "dev": "run-p --print-label dev:*"
   },
   "author": "",
@@ -24,6 +24,7 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.1.3",
     "dotenv": "^16.3.1",
     "grammy": "^1.20.2",
     "mongodb": "^6.3.0",

@@ -7,3 +7,5 @@ dist
 # Environment files
 .env
 
+images
+uploads
