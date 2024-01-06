@@ -18,13 +18,13 @@ export type BotContext = FileFlavor<HydrateFlavor<Context>>;
 type BotApi = FileApiFlavor<Api>;
 const bot = new Bot<BotContext, BotApi>(env.BOT_TOKEN, {
   client: {
-    apiRoot: "http://127.0.0.1:8081",
+    apiRoot: "http://127.0.0.1:80",
   },
 });
 bot.use(ignoreOld(60), hydrate());
 bot.api.config.use(
   hydrateFiles(bot.token, {
-    apiRoot: "http://127.0.0.1:8081",
+    apiRoot: "http://127.0.0.1:80",
   })
 );
 let shellMode = false;
@@ -126,7 +126,7 @@ bot.command("shellmode", async (ctx) => {
 // ////////////////////////////////////
 // file upload
 // ///////////////////////////////////
-bot.on([":media", ":file"], async (ctx) => {
+bot.on([":media", ":file"], async (ctx, next) => {
   const caption = ctx.msg.caption;
   if (!caption) {
     return;
@@ -135,23 +135,38 @@ bot.on([":media", ":file"], async (ctx) => {
   if (!isUploading) {
     return;
   }
-  // const fileName = isUploading[1];
+  const fileName = caption.match(/\/upload (.+)/)?.[1];
   if (isUploading && ctx.from?.id !== env.ADMIN_ID) {
     await ctx.reply("You are not admin!");
     return;
   }
-  // const defaultFileName =
-  //   ctx.msg.document?.file_name ||
-  //   ctx.msg.photo?.at(0)?.file_id ||
-  //   ctx.msg.video?.file_name ||
-  //   ctx.msg.audio?.file_name;
-  // const reply = !fileName
-  // ? await ctx.reply("Using default name..."):
+  if (!fileName && ctx.msg.photo) {
+    await ctx.reply("No file name provided!");
+    return;
+  }
   const msg = await ctx.reply("Uploading file...");
-
   const file = await ctx.getFile();
   const fileUrl = file.getUrl();
   await msg.editText(`Done uploading file... ${fileUrl}`);
+  await db.file.insertOne({
+    file_name: fileName || file.name,
+    file_url: fileUrl,
+    file_type: file.type,
+  });
+});
+
+bot.command("list", async (ctx) => {
+  if (ctx.from?.id !== env.ADMIN_ID) {
+    await ctx.reply("You are not admin!");
+    return;
+  }
+  const chat = await ctx.reply("Getting files...");
+  const files = await db.file.find({}, { projection: { _id: 0 } }).toArray();
+  const fileList = files
+    .map((file) => `${file.file_name} :: ${file.file_url}`)
+    .join("\n");
+  console.log(fileList);
+  await chat.editText(fileList);
 });
 
 // ///////////////////////////////////////////////////

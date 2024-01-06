@@ -8,6 +8,7 @@ const envVariables = z.object({
   ANNOUNCEMENT_CHANNEL_ID: z.number(),
   LOG_GROUP_ID: z.number(),
   GEMINI_API_KEY: z.string(),
+  CONTAINER_ID: z.string(),
 });
 
 export const env = envVariables.parse({
