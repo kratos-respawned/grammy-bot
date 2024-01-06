@@ -1,17 +1,32 @@
-import { Bot, GrammyError, HttpError, InputFile } from "grammy";
+import { Api, Bot, Context, GrammyError, HttpError, InputFile } from "grammy";
+import { existsSync, mkdirSync } from "fs";
 import { env } from "./utils/env.js";
 import { connectToDb } from "./db/db.js";
 import { safeAwait } from "./utils/error.js";
-import { existsSync, mkdirSync } from "fs";
 import { executeCommand } from "./helpers/shell.js";
 import { startAIChat } from "./helpers/aiChat.js";
 import { getAnime } from "./helpers/anime.js";
 import { getSmallImage } from "./utils/compressImage.js";
-const bot = new Bot(env.BOT_TOKEN, {
+import { hydrate, type HydrateFlavor } from "@grammyjs/hydrate";
+import {
+  hydrateFiles,
+  type FileApiFlavor,
+  type FileFlavor,
+} from "@grammyjs/files";
+import { ignoreOld } from "./middleware/ignoreOld.js";
+export type BotContext = FileFlavor<HydrateFlavor<Context>>;
+type BotApi = FileApiFlavor<Api>;
+const bot = new Bot<BotContext, BotApi>(env.BOT_TOKEN, {
   client: {
     apiRoot: "http://127.0.0.1:8081",
   },
 });
+bot.use(ignoreOld(60), hydrate());
+bot.api.config.use(
+  hydrateFiles(bot.token, {
+    apiRoot: "http://127.0.0.1:8081",
+  })
+);
 let shellMode = false;
 const { result: db } = await safeAwait(connectToDb());
 if (!db) throw new Error("Could not connect to db!");
@@ -111,53 +126,47 @@ bot.command("shellmode", async (ctx) => {
 // ////////////////////////////////////
 // file upload
 // ///////////////////////////////////
-bot.hears(/\/upload (.+)/, async (ctx) => {
-  if (ctx.from?.id !== env.ADMIN_ID) {
+bot.on([":media", ":file"], async (ctx) => {
+  const caption = ctx.msg.caption;
+  if (!caption) {
+    return;
+  }
+  const isUploading = caption.match(/\/upload/);
+  if (!isUploading) {
+    return;
+  }
+  // const fileName = isUploading[1];
+  if (isUploading && ctx.from?.id !== env.ADMIN_ID) {
     await ctx.reply("You are not admin!");
     return;
   }
-  const message = ctx.msg.reply_to_message;
-  if (!message) {
-    await ctx.reply("No message provided!");
-    return;
-  }
-  const fileName = ctx.match[1];
-  if (!fileName) {
-    await ctx.reply("No filename provided!");
-    return;
-  }
-  const fileId =
-    message.document?.file_id ||
-    message.photo?.at(0)?.file_id ||
-    message.video?.file_id ||
-    message.audio?.file_id;
-  if (!fileId) {
-    await ctx.reply("No file provided!");
-    return;
-  }
-  // const { result: file } = await safeAwait(ctx.api.getFile(fileId));
+  // const defaultFileName =
+  //   ctx.msg.document?.file_name ||
+  //   ctx.msg.photo?.at(0)?.file_id ||
+  //   ctx.msg.video?.file_name ||
+  //   ctx.msg.audio?.file_name;
+  // const reply = !fileName
+  // ? await ctx.reply("Using default name..."):
+  const msg = await ctx.reply("Uploading file...");
+
+  const file = await ctx.getFile();
+  const fileUrl = file.getUrl();
+  await msg.editText(`Done uploading file... ${fileUrl}`);
 });
 
 // ///////////////////////////////////////////////////
 // anime command
 // //////////////////////////////////////////////////
 bot.command("anime", async (ctx) => {
-  const { result: chat } = await safeAwait(
-    ctx.reply("Searching for anime...", {
-      reply_parameters: {
-        message_id: ctx.msg.message_id,
-      },
-    })
-  );
-  if (!chat) return;
+  const chat = await ctx.reply("Searching for anime...", {
+    reply_parameters: {
+      message_id: ctx.msg.message_id,
+    },
+  });
   const image = await getAnime();
-  await bot.api.deleteMessage(chat.chat.id, chat.message_id);
+  // await bot.api.deleteMessage(chat.chat.id, chat.message_id);
   if (!image) {
-    await ctx.reply("Error getting anime image!", {
-      reply_parameters: {
-        message_id: ctx.msg.message_id,
-      },
-    });
+    await chat.editText("Error getting anime image!");
     return;
   }
   await ctx
@@ -167,6 +176,7 @@ bot.command("anime", async (ctx) => {
       },
     })
     .catch(async (err) => {
+      await chat.editText("Large image, compressing...");
       const imgaddress = await getSmallImage(image);
       if (!imgaddress) return;
       await ctx.replyWithPhoto(new InputFile(imgaddress), {
@@ -175,6 +185,7 @@ bot.command("anime", async (ctx) => {
         },
       });
     });
+  await chat.delete();
 });
 
 // ///////////////////////////////////////////////////
@@ -185,25 +196,28 @@ bot.on("message:text", async (ctx) => {
   if (!text) return;
   if (ctx.from?.id !== env.ADMIN_ID) return;
   if (shellMode) {
-    await ctx.reply("Running command...").then(async (msg) => {
-      const { result } = await safeAwait(executeCommand(text));
-      if (!result) {
-        await ctx.api.editMessageText(
-          msg.chat.id,
-          msg.message_id,
-          `Error executing command: ${text}`
-        );
-        return;
-      }
-      await ctx.api.editMessageText(msg.chat.id, msg.message_id, result);
-    });
+    const chat = await ctx.reply("Running command...");
+    const { result } = await safeAwait(executeCommand(text));
+    if (!result) {
+      chat.editText(`Error executing command: ${text}`);
+      return;
+    }
+    await chat.editText(result);
     return;
   }
+  const chat = await ctx.reply("Thinking...");
   const { result: geminiResponse, error } = await safeAwait(
     aiChat.sendMessage(text)
   );
   if (!geminiResponse || error) {
-    await ctx.reply("Error sending message to AI!");
+    const errMessage =
+      error &&
+      typeof error === "object" &&
+      "message" in error &&
+      typeof error.message === "string"
+        ? error.message
+        : "Error getting response from AI!";
+    await chat.editText(errMessage);
     return;
   }
   const reply = geminiResponse.response.text();
