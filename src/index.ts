@@ -18,13 +18,13 @@ export type BotContext = FileFlavor<HydrateFlavor<Context>>;
 type BotApi = FileApiFlavor<Api>;
 const bot = new Bot<BotContext, BotApi>(env.BOT_TOKEN, {
   client: {
-    apiRoot: "http://127.0.0.1:80",
+    apiRoot: env.API_ADDRESS,
   },
 });
 bot.use(ignoreOld(60), hydrate());
 bot.api.config.use(
   hydrateFiles(bot.token, {
-    apiRoot: "http://127.0.0.1:80",
+    apiRoot: env.API_ADDRESS,
   })
 );
 let shellMode = false;
