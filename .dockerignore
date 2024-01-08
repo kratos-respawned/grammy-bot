@@ -1,0 +1,10 @@
+node_modules
+uploads
+images
+.env.local
+dist
+.vscode
+# TypeScript
+*.tsbuildinfo
+dist
+.env

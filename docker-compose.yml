@@ -8,7 +8,6 @@ services:
       - .env
     volumes:
       - telegram-bot-api-data:/var/lib/telegram-bot-api
-
   nginx:
     image: nginx:1.19-alpine
     restart: always
@@ -19,6 +18,15 @@ services:
       - ./nginx:/etc/nginx/conf.d/
     ports:
       - "80:80"
+  app:
+    build: ./
+    env_file:
+      - .env
+    restart: always
+    depends_on:
+      - nginx
+    volumes:
+      - telegram-bot-api-data:/app/uploads
 
 volumes:
   telegram-bot-api-data:
