@@ -16,13 +16,12 @@ import {
 import { ignoreOld } from "./middleware/ignoreOld.js";
 export type BotContext = FileFlavor<HydrateFlavor<Context>>;
 type BotApi = FileApiFlavor<Api>;
-console.log("Starting bot...");
 const bot = new Bot<BotContext, BotApi>(env.BOT_TOKEN, {
   client: {
     apiRoot: "http://nginx",
   },
 });
-bot.use(ignoreOld(60), hydrate());
+bot.use(ignoreOld(0), hydrate());
 bot.api.config.use(
   hydrateFiles(bot.token, {
     apiRoot: env.API_ADDRESS,
